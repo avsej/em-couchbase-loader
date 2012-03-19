@@ -1,0 +1,25 @@
+GEM
+  remote: http://rubygems.org/
+  specs:
+    addressable (2.2.7)
+    cookiejar (0.3.0)
+    em-couchbase (0.9.0)
+      em-http-request (~> 1.0.1)
+      yajl-ruby (~> 1.1.0)
+    em-http-request (1.0.2)
+      addressable (>= 2.2.3)
+      cookiejar
+      em-socksify
+      eventmachine (>= 1.0.0.beta.4)
+      http_parser.rb (>= 0.5.3)
+    em-socksify (0.1.0)
+      eventmachine
+    eventmachine (1.0.0.beta.4)
+    http_parser.rb (0.5.3)
+    yajl-ruby (1.1.0)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  em-couchbase (~> 0.9.0)
