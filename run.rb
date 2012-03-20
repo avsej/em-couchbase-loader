@@ -83,6 +83,9 @@ OptionParser.new do |opts|
   opts.on("-p", "--passwd PASSWORD", "Password to log with (default: none)") do |v|
     options[:passwd] = v
   end
+  opts.on("-v", "--[no-]verbose", "Run verbosely") do |v|
+    options[:verbose] = v
+  end
   opts.on_tail("-?", "--help", "Show this message") do
     puts opts
     exit
@@ -102,16 +105,20 @@ options[:concurrency].times do |n|
       cc = EM::Protocols::Couchbase.connect
       on_complete = lambda do |ret|
         ops_per_fork -= 1
-#         case ret.operation
-#         when :set
-#           STDERR.print("s")
-#         when :get
-#           STDERR.print("g")
-#         end
+        if options[:verbose]
+          case ret.operation
+          when :set
+            STDERR.print("s")
+          when :get
+            STDERR.print("g")
+          end
+        end
         EM.stop if ops_per_fork < 0
       end
       on_tick = lambda do
-#         STDERR.print(".")
+        if options[:verbose]
+          STDERR.print(".")
+        end
         options[:slice].times do
           if rand > options[:ratio]
             cc.set("#{options[:prefix]}fork-#{n}:#{n % 10}", value, &on_complete)
