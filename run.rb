@@ -36,7 +36,8 @@ options = {
   :prefix => 'em-couchbase:',
   :size => 256,
   :slice => 1_000,
-  :tick => 1
+  :tick => 1,
+  :mechanism => :select
 }
 
 LOGGER = Logger.new(STDOUT)
@@ -48,6 +49,9 @@ end
 
 OptionParser.new do |opts|
   opts.banner = "Usage: #{__FILE__} [options]"
+  opts.on("-m", "--mechanism MECH", "The mechanism for multiplexing I/O. EventMachine supports (:select, :epoll, :kqueue) (default: #{options[:mechanism].inspect})") do |v|
+    options[:mechanism] = v.to_sym
+  end
   opts.on("-t", "--tick SECONDS", "The interval for timer (default: #{options[:tick].inspect})") do |v|
     options[:tick] = v.to_i
   end
@@ -94,6 +98,15 @@ end.parse!
 
 ops_per_fork = (options[:operations] / options[:concurrency].to_f).ceil
 forks = []
+
+case options[:mechanism]
+when :epoll
+  EM.epoll = true
+when :kqueue
+  EM.kqueue = true
+else
+  # select
+end
 
 options[:concurrency].times do |n|
   forks << fork do
