@@ -1,3 +1,3 @@
 source :rubygems
 
-gem 'em-couchbase', '~> 0.9.0'
+gem 'em-couchbase', '~> 0.1.0'
