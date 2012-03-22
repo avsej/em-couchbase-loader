@@ -28,7 +28,8 @@ require 'optparse'
 require 'logger'
 
 options = {
-  :host => "127.0.0.1:8091",
+  :hostname => "127.0.0.1",
+  :port => 8091,
   :bucket => "default",
   :concurrency => 1,
   :ratio => 0.5,
@@ -108,6 +109,10 @@ else
   # select
 end
 
+IGNORED_ERRORS = [
+  EM::Protocols::Couchbase::Error::NotFound
+]
+
 options[:concurrency].times do |n|
   forks << fork do
     $0 = "#{__FILE__}: fork ##{n}"
@@ -115,32 +120,41 @@ options[:concurrency].times do |n|
     value << ('.' * (options[:size] - value.size))
 
     EM.run do
-      cc = EM::Protocols::Couchbase.connect
+      cc = EM::Protocols::Couchbase.connect(:hostname => options[:hostname],
+                                            :port => options[:port],
+                                            :bucket => options[:bucket])
+      cc.on_error do |_, error|
+        warn "Failed to connect to #{options[:hostname]}:#{options[:port]}: #{error}"
+        EM.stop
+      end
       on_complete = lambda do |ret|
         ops_per_fork -= 1
         if options[:verbose]
-          case ret.operation
-          when :set
-            STDERR.print("s")
-          when :get
-            STDERR.print("g")
+          if ret.success? || IGNORED_ERRORS.include?(ret.error.class)
+            case ret.operation
+            when :set
+              STDERR.print("s")
+            when :get
+              STDERR.print("g")
+            end
+          else
+            STDERR.print("E")
           end
         end
         EM.stop if ops_per_fork < 0
       end
-      on_tick = lambda do
+      EM.add_periodic_timer(options[:tick]) do
         if options[:verbose]
           STDERR.print(".")
         end
-        options[:slice].times do
+        options[:slice].times do |t|
           if rand > options[:ratio]
-            cc.set("#{options[:prefix]}fork-#{n}:#{n % 10}", value, &on_complete)
+            cc.set("#{options[:prefix]}fork-#{n}:#{t}", value, &on_complete)
           else
-            cc.get("#{options[:prefix]}fork-#{n}:#{n % 10}", &on_complete)
+            cc.get("#{options[:prefix]}fork-#{n}:#{t}", &on_complete)
           end
         end
       end
-      EM.add_periodic_timer(options[:tick], &on_tick)
     end
   end
 end
