@@ -38,6 +38,7 @@ options = {
   :size => 256,
   :slice => 1_000,
   :tick => 1,
+  :use_fork => true,
   :mechanism => :select
 }
 
@@ -50,6 +51,9 @@ end
 
 OptionParser.new do |opts|
   opts.banner = "Usage: #{__FILE__} [options]"
+  opts.on("-f", "--[no-]use-fork", "Use fork, if it is available (default: #{options[:use_fork].inspect})") do |v|
+    options[:use_fork] = v
+  end
   opts.on("-m", "--mechanism MECH", "The mechanism for multiplexing I/O. EventMachine supports (:select, :epoll, :kqueue) (default: #{options[:mechanism].inspect})") do |v|
     options[:mechanism] = v.to_sym
   end
@@ -97,9 +101,6 @@ OptionParser.new do |opts|
   end
 end.parse!
 
-ops_per_fork = (options[:operations] / options[:concurrency].to_f).ceil
-forks = []
-
 case options[:mechanism]
 when :epoll
   EM.epoll = true
@@ -113,8 +114,40 @@ IGNORED_ERRORS = [
   EM::Protocols::Couchbase::Error::NotFound
 ]
 
+HAVE_FORK = begin
+              Process.fork { exit }
+              true
+            rescue NotImplementedError
+              false
+            end
+
+USE_FORK = options[:use_fork]
+
+def spawn_worker(&block)
+  if HAVE_FORK && USE_FORK
+    Process.fork(&block)
+  else
+    Thread.new(&block)
+  end
+end
+
+def wait_for(workers)
+  if HAVE_FORK && USE_FORK
+    workers.each do |pid|
+      Process.wait(pid)
+    end
+  else
+    workers.each do |tid|
+      tid.join
+    end
+  end
+end
+
+ops_per_fork = (options[:operations] / options[:concurrency].to_f).ceil
+workers = []
+
 options[:concurrency].times do |n|
-  forks << fork do
+  workers << spawn_worker do
     $0 = "#{__FILE__}: fork ##{n}"
     value = $0.dup
     value << ('.' * (options[:size] - value.size))
@@ -159,6 +192,4 @@ options[:concurrency].times do |n|
   end
 end
 
-forks.each do |pid|
-  Process.wait(pid)
-end
+wait_for(workers)
